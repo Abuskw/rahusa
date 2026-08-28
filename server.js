@@ -348,12 +348,17 @@ app.get('/api/shops', async (req, res) => {
 app.post('/api/shops', async (req, res) => {
   const { name, location } = req.body;
   if (!name) return res.status(400).json({ error: 'Name is required' });
-  const { data, error } = await supabase
-    .from('shops')
-    .insert({ name, location: location || '' })
-    .select();
-  if (error) return res.status(500).json({ error: error.message });
-  res.status(201).json(data[0]);
+  try {
+    const { data, error } = await supabase
+      .from('shops')
+      .insert({ name, location: location || '' })
+      .select();
+    if (error) throw error;
+    res.status(201).json(data[0]);
+  } catch (err) {
+    console.error('Error creating shop:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 // ----- Notes -----
 app.get('/api/notes', async (req, res) => {
