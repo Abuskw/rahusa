@@ -34,7 +34,7 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
 });
 
 console.log('🔌 Connected to Supabase:', supabaseUrl);
-
+console.log('Using key starting with:', supabaseKey.substring(0, 10));
 // ========== SEED DEFAULT PRODUCTS ==========
 async function seedProducts() {
   const { data: existing, error, count } = await supabase
