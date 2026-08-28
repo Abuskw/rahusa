@@ -1038,7 +1038,18 @@ app.get('/api/test', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
+app.get('/', (req, res) => {
+  res.json({
+    message: 'RAHUSA API is running! 🚀',
+    endpoints: {
+      products: '/api/products',
+      customers: '/api/customers',
+      sales: '/api/sales',
+      loans: '/api/loans',
+      dashboard: '/api/dashboard/stats'
+    }
+  });
+});
 // ========== START SERVER ==========
 app.listen(port, async () => {
   console.log(`🍪 RAHUSA Backend is running on http://localhost:${port}`);
