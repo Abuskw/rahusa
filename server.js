@@ -334,6 +334,27 @@ app.post('/api/orders', async (req, res) => {
   res.status(201).json({ success: true, sales: data });
 });
 
+
+      // ----- Shops -----
+app.get('/api/shops', async (req, res) => {
+  const { data, error } = await supabase
+    .from('shops')
+    .select('*')
+    .order('name');
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.post('/api/shops', async (req, res) => {
+  const { name, location } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name is required' });
+  const { data, error } = await supabase
+    .from('shops')
+    .insert({ name, location: location || '' })
+    .select();
+  if (error) return res.status(500).json({ error: error.message });
+  res.status(201).json(data[0]);
+});
 // ----- Notes -----
 app.get('/api/notes', async (req, res) => {
   const { data, error } = await supabase
