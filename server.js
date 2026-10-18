@@ -34,7 +34,7 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
 });
 
 console.log('🔌 Connected to Supabase:', supabaseUrl);
-console.log('Using key starting with:', supabaseKey.substring(0, 10));
+
 // ========== SEED DEFAULT PRODUCTS ==========
 async function seedProducts() {
   const { data: existing, error, count } = await supabase
@@ -334,32 +334,6 @@ app.post('/api/orders', async (req, res) => {
   res.status(201).json({ success: true, sales: data });
 });
 
-
-      // ----- Shops -----
-app.get('/api/shops', async (req, res) => {
-  const { data, error } = await supabase
-    .from('shops')
-    .select('*')
-    .order('name');
-  if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
-});
-
-app.post('/api/shops', async (req, res) => {
-  const { name, location } = req.body;
-  if (!name) return res.status(400).json({ error: 'Name is required' });
-  try {
-    const { data, error } = await supabase
-      .from('shops')
-      .insert({ name, location: location || '' })
-      .select();
-    if (error) throw error;
-    res.status(201).json(data[0]);
-  } catch (err) {
-    console.error('Error creating shop:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
 // ----- Notes -----
 app.get('/api/notes', async (req, res) => {
   const { data, error } = await supabase
@@ -560,7 +534,7 @@ app.post('/api/loans/:id/pay', async (req, res) => {
   const { amount, notes } = req.body;
 
   if (!amount || amount <= 0) {
-    return res.status(400).json({ error: 'Valid amount is required' });
+    return res.status(400).json({ success: false, error: 'Valid amount is required' });
   }
 
   try {
@@ -572,97 +546,57 @@ app.post('/api/loans/:id/pay', async (req, res) => {
       .single();
 
     if (loanErr || !loan) {
-      return res.status(404).json({ error: 'Loan not found' });
+      return res.status(404).json({ success: false, error: 'Loan not found' });
     }
 
     if (amount > loan.remaining) {
-      return res.status(400).json({ 
-        error: `Payment exceeds remaining balance (₦${loan.remaining.toFixed(2)})` 
+      return res.status(400).json({
+        success: false,
+        error: `Payment exceeds remaining balance (₦${loan.remaining.toFixed(2)})`,
       });
     }
 
     // 2. Insert payment
     const { data: payment, error: payErr } = await supabase
       .from('payments')
-      .insert({
-        loan_id: id,
-        amount: amount,
-        notes: notes || null,
-      })
+      .insert({ loan_id: id, amount, notes: notes || null })
       .select();
 
     if (payErr) {
       console.error('Payment insert error:', payErr);
-      return res.status(500).json({ error: payErr.message });
+      return res.status(500).json({ success: false, error: payErr.message });
     }
 
     // 3. Update loan
     const newRemaining = loan.remaining - amount;
     const newStatus = newRemaining <= 0.01 ? 'paid' : 'active';
+    await supabase.from('loans').update({ remaining: newRemaining, status: newStatus }).eq('id', id);
 
-    await supabase
-      .from('loans')
-      .update({ 
-        remaining: newRemaining, 
-        status: newStatus 
-      })
-      .eq('id', id);
-
-    // 4. Fetch updated loan with customer and product info
+    // 4. Fetch updated loan
     const { data: updatedLoan, error: fetchErr } = await supabase
       .from('loans')
-      .select(`
-        *,
-        customers (name, phone),
-        products (name, price)
-      `)
+      .select(`*, customers (name, phone), products (name, price)`)
       .eq('id', id)
       .single();
 
-    if (fetchErr) {
-      console.error('Fetch updated loan error:', fetchErr);
-      // Return minimal success response
-      return res.status(201).json({
-        success: true,
-        payment: payment[0],
-        remaining: newRemaining,
-        is_paid: newStatus === 'paid',
-        message: 'Payment recorded but loan details could not be refreshed'
-      });
-    }
-
-    // 5. Get all payments for this loan (to show history)
-    const { data: allPayments, error: payHistoryErr } = await supabase
+    // 5. Fetch all payments
+    const { data: allPayments } = await supabase
       .from('payments')
       .select('*')
       .eq('loan_id', id)
       .order('payment_date', { ascending: false });
 
-    if (payHistoryErr) {
-      console.error('Payment history error:', payHistoryErr);
-      // Still return the loan data without payment history
-      return res.status(201).json({
-        success: true,
-        loan: updatedLoan,
-        payment: payment[0],
-        remaining: newRemaining,
-        is_paid: newStatus === 'paid'
-      });
-    }
-
-    // 6. Return everything
     res.status(201).json({
       success: true,
-      loan: updatedLoan,
+      loan: fetchErr ? null : updatedLoan,
       payment: payment[0],
-      payments: allPayments,
+      payments: allPayments || [],
       remaining: newRemaining,
-      is_paid: newStatus === 'paid'
+      is_paid: newStatus === 'paid',
     });
-
   } catch (error) {
     console.error('Payment error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -1064,18 +998,7 @@ app.get('/api/test', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-app.get('/', (req, res) => {
-  res.json({
-    message: 'RAHUSA API is running! 🚀',
-    endpoints: {
-      products: '/api/products',
-      customers: '/api/customers',
-      sales: '/api/sales',
-      loans: '/api/loans',
-      dashboard: '/api/dashboard/stats'
-    }
-  });
-});
+
 // ========== START SERVER ==========
 app.listen(port, async () => {
   console.log(`🍪 RAHUSA Backend is running on http://localhost:${port}`);
